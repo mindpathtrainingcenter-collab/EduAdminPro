@@ -1,0 +1,81 @@
+{
+  "entities": {
+    "School": {
+      "title": "School",
+      "description": "Information about a school registered in the platform.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Official name of the school." },
+        "level": { "type": "string", "enum": ["PAUD", "SD", "SMP", "SMA", "SMK"], "description": "Education level." },
+        "npsn": { "type": "string", "description": "National School Identification Number." },
+        "address": { "type": "string" },
+        "logoUrl": { "type": "string", "format": "uri" },
+        "adminId": { "type": "string", "description": "UID of the school admin." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "level", "adminId"]
+    },
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "User account details and role.",
+      "type": "object",
+      "properties": {
+        "displayName": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["SUPER_ADMIN", "ADMIN_SEKOLAH", "GURU"] },
+        "schoolId": { "type": "string" },
+        "photoURL": { "type": "string", "format": "uri" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["displayName", "email", "role"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "Student record within a school.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "nisn": { "type": "string" },
+        "class": { "type": "string" },
+        "gender": { "type": "string", "enum": ["L", "P"] },
+        "schoolId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "schoolId"]
+    },
+    "Document": {
+      "title": "Document",
+      "description": "AI generated educational document.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "type": { "type": "string", "enum": ["PROTA", "PROMES", "ATP", "MODUL_AJAR", "KOKURIKULER", "MEDIA", "QUESTION", "ANALYSIS"] },
+        "content": { "type": "string" },
+        "authorId": { "type": "string" },
+        "schoolId": { "type": "string" },
+        "subject": { "type": "string" },
+        "grade": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "type", "content", "authorId", "schoolId"]
+    }
+  },
+  "firestore": {
+    "/schools/{schoolId}": {
+      "schema": "School",
+      "description": "Collection of schools."
+    },
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Collection of user profiles."
+    },
+    "/students/{studentId}": {
+      "schema": "Student",
+      "description": "Collection of students."
+    },
+    "/documents/{docId}": {
+      "schema": "Document",
+      "description": "Collection of generated documents."
+    }
+  }
+}

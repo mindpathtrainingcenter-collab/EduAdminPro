@@ -1,0 +1,9 @@
+{
+  "name": "EDUADMIN AI",
+  "description": "A modern AI-powered teacher administration and learning platform for Indonesia, supporting PAUD to SMK levels with automated document generation, analytics, and school management.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}

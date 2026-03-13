@@ -1,0 +1,124 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: schools
+    // Fields: name, level, npsn, address, logoUrl, adminId, createdAt
+    //
+    // Collection: users
+    // Fields: uid, displayName, email, role, schoolId, photoURL, createdAt
+    //
+    // Collection: students
+    // Fields: name, nisn, class, gender, schoolId, createdAt
+    //
+    // Collection: documents
+    // Fields: title, type, content, authorId, schoolId, subject, grade, createdAt
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      let path = /databases/$(database)/documents/users/$(request.auth.uid);
+      return exists(path) ? get(path).data : {"role": "GURU", "schoolId": ""};
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN') ||
+        (request.auth.token.get('email', '').lower() == "mindpathtrainingcenter@gmail.com")
+      );
+    }
+
+    function isSchoolAdmin(schoolId) {
+      return isAuthenticated() && 
+        getUserData().role == 'ADMIN_SEKOLAH' &&
+        getUserData().schoolId == schoolId;
+    }
+
+    function isTeacherInSchool(schoolId) {
+      return isAuthenticated() && 
+        getUserData().schoolId == schoolId;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Domain Validators
+    function isValidUser(data) {
+      // For pre-authorized users, uid is not yet known
+      let isPreAuth = data.get('isPreAuthorized', false) == true;
+      let requiredFields = isPreAuth ? ['email', 'displayName', 'role'] : ['uid', 'email', 'displayName', 'role'];
+      
+      return data.keys().hasAll(requiredFields) &&
+             (isPreAuth || data.uid is string) &&
+             data.email is string &&
+             data.displayName is string &&
+             data.role in ['SUPER_ADMIN', 'ADMIN_SEKOLAH', 'GURU'];
+    }
+
+    function isValidDocument(data) {
+      return data.keys().hasAll(['title', 'type', 'content', 'authorId', 'schoolId']) &&
+             data.title is string && data.title.size() < 200 &&
+             data.content is string && data.content.size() < 100000 &&
+             data.authorId == request.auth.uid;
+    }
+
+    // Schools
+    match /schools/{schoolId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    // Users
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (
+        isOwner(userId) || 
+        isSuperAdmin() || 
+        (resource.data.get('schoolId', '') != '' && isSchoolAdmin(resource.data.schoolId)) ||
+        (resource.data.get('email', '') == request.auth.token.email)
+      );
+      
+      // Allow initial creation by the user themselves
+      // OR creation by an admin for pre-authorization
+      allow create: if isAuthenticated() && (
+        (isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == 'GURU' || isSuperAdmin())) ||
+        (isSuperAdmin() && isValidUser(request.resource.data)) ||
+        (isSchoolAdmin(request.resource.data.get('schoolId', '')) && isValidUser(request.resource.data) && request.resource.data.role != 'SUPER_ADMIN')
+      );
+      
+      // Prevent role escalation on update
+      allow update: if isAuthenticated() && 
+                    isValidUser(request.resource.data) &&
+                    (
+                      isSuperAdmin() || 
+                      (isOwner(userId) && request.resource.data.role == resource.data.role) ||
+                      (isSchoolAdmin(resource.data.schoolId) && request.resource.data.role != 'SUPER_ADMIN')
+                    );
+
+      allow delete: if isAuthenticated() && (isSuperAdmin() || isSchoolAdmin(resource.data.schoolId));
+    }
+
+    // Students
+    match /students/{studentId} {
+      allow read: if isAuthenticated() && (isSuperAdmin() || isTeacherInSchool(resource.data.schoolId));
+      allow create, update, delete: if isAuthenticated() && (isSuperAdmin() || isSchoolAdmin(request.resource.data.schoolId));
+    }
+
+    // Documents
+    match /documents/{docId} {
+      allow read: if isAuthenticated() && (isSuperAdmin() || isTeacherInSchool(resource.data.schoolId));
+      allow create: if isAuthenticated() && isValidDocument(request.resource.data) && isTeacherInSchool(request.resource.data.schoolId);
+      allow update: if isAuthenticated() && isValidDocument(request.resource.data) && 
+                    (isOwner(resource.data.authorId) || isSuperAdmin() || isSchoolAdmin(resource.data.schoolId));
+      allow delete: if isAuthenticated() && (isOwner(resource.data.authorId) || isSuperAdmin() || isSchoolAdmin(resource.data.schoolId));
+    }
+  }
+}
